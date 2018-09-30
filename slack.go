@@ -9,7 +9,10 @@ import (
 )
 
 type StreamJSON struct {
-	URL string `json:"url"`
+	URL  string `json:"url"`
+	Self struct {
+		ID string `json:"id"`
+	} `json:"self"`
 }
 
 type MessageJSON struct {
@@ -19,7 +22,12 @@ type MessageJSON struct {
 	Channel string `json:"channel"`
 }
 
-func getWebSocket(url string) string {
+type SlackBot struct {
+	user string
+	ws   *websocket.Conn
+}
+
+func (s *SlackBot) Connect(url string) {
 	var stream StreamJSON
 
 	resp, err := http.Get(url)
@@ -36,22 +44,15 @@ func getWebSocket(url string) string {
 	}
 
 	json.Unmarshal(body, &stream)
-	return stream.URL
-}
 
-type SlackBot struct {
-	ws *websocket.Conn
-}
-
-func (s *SlackBot) Connect(url string) {
-	url = getWebSocket(url)
-	ws, err := websocket.Dial(url, "", url)
+	ws, err := websocket.Dial(stream.URL, "", stream.URL)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	s.ws = ws
+	s.user = "<@" + stream.Self.ID + ">"
 }
 
 func (s *SlackBot) receive(channel chan MessageJSON) {

@@ -78,8 +78,9 @@ func request(method string, address string, header map[string]string, data map[s
 }
 
 type Spotify struct {
-	token  string
-	client string
+	token   string
+	client  string
+	refresh string
 }
 
 func (s *Spotify) getTokenFromRefresh(code string) TokenJSON {
@@ -134,8 +135,8 @@ func (s *Spotify) run(method string, endpoint string) string {
 	return request(method, endpoint, header, nil)
 }
 
-func (s *Spotify) Connect(code string) {
-	token := s.getTokenFromRefresh(code)
+func (s *Spotify) Connect() {
+	token := s.getTokenFromRefresh(s.refresh)
 	s.token = token.Code
 }
 
@@ -163,11 +164,12 @@ func (s *Spotify) Restart() {
 	s.run("PUT", "https://api.spotify.com/v1/me/player/seek?position_ms=0")
 }
 
-func (s *Spotify) Current() {
+func (s *Spotify) Current() string {
 	var song SongJSON
 
 	body := s.run("GET", "https://api.spotify.com/v1/me/player/currently-playing")
 	json.Unmarshal([]byte(body), &song)
 
-	fmt.Println(song.Item.Name, " - ", song.Item.Artists[0].Name)
+	// fmt.Println(song.Item.Name, " - ", song.Item.Artists[0].Name)
+	return song.Item.Artists[0].Name + " - " + song.Item.Name
 }
