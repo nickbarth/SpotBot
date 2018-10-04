@@ -11,6 +11,19 @@ import (
 	"strings"
 )
 
+type RequestDataType int
+
+const (
+	RequestTypeString RequestDataType = iota
+	RequestTypeValues
+)
+
+type RequestData struct {
+	rtype  RequestDataType
+	values url.Values
+	text   string
+}
+
 type TokenJSON struct {
 	Code    string `json:"access_token"`
 	Type    string `json:"token_type"`
@@ -58,12 +71,23 @@ func openBrowser(url string) {
 	}
 }
 
-func request(method string, address string, header map[string]string, data url.Values) string {
+func request(method string, address string, header map[string]string, data *RequestData) string {
 	client := &http.Client{}
+	var err error
+	var req *http.Request
 
-	paramsEncoded := strings.NewReader(data.Encode())
-
-	req, err := http.NewRequest(method, address, paramsEncoded)
+	if data == nil {
+		req, err = http.NewRequest(method, address, nil)
+	} else {
+		switch data.rtype {
+		case RequestTypeString:
+			encodedText := strings.NewReader(data.text)
+			req, err = http.NewRequest(method, address, encodedText)
+		case RequestTypeValues:
+			encodedValues := strings.NewReader(data.values.Encode())
+			req, err = http.NewRequest(method, address, encodedValues)
+		}
+	}
 
 	if err != nil {
 		log.Fatal(err)
@@ -104,12 +128,15 @@ func (s *Spotify) getTokenFromRefresh(code string) TokenJSON {
 		"Content-Type":  "application/x-www-form-urlencoded",
 	}
 
-	data := url.Values{
-		"refresh_token": {code},
-		"grant_type":    {"refresh_token"},
+	data := RequestData{
+		rtype: RequestTypeValues,
+		values: url.Values{
+			"refresh_token": {code},
+			"grant_type":    {"refresh_token"},
+		},
 	}
 
-	body := request("POST", "https://accounts.spotify.com/api/token", header, data)
+	body := request("POST", "https://accounts.spotify.com/api/token", header, &data)
 
 	fmt.Println(string(body))
 	json.Unmarshal([]byte(body), &token)
@@ -125,13 +152,16 @@ func (s *Spotify) getToken(code string) TokenJSON {
 		"Content-Type":  "application/x-www-form-urlencoded",
 	}
 
-	data := url.Values{
-		"code":         {code},
-		"grant_type":   {"authorization_code"},
-		"redirect_uri": {"http://localhost/"},
+	data := RequestData{
+		rtype: RequestTypeValues,
+		values: url.Values{
+			"code":         {code},
+			"grant_type":   {"authorization_code"},
+			"redirect_uri": {"http://localhost/"},
+		},
 	}
 
-	body := request("POST", "https://accounts.spotify.com/api/token", header, data)
+	body := request("POST", "https://accounts.spotify.com/api/token", header, &data)
 
 	fmt.Println(string(body))
 	json.Unmarshal([]byte(body), &token)
@@ -139,13 +169,13 @@ func (s *Spotify) getToken(code string) TokenJSON {
 	return token
 }
 
-func (s *Spotify) run(method string, endpoint string, data url.Values) string {
+func (s *Spotify) run(method string, endpoint string, data *RequestData) string {
 	header := map[string]string{
 		"Authorization": "Bearer " + s.token,
 		"Content-Type":  "application/x-www-form-urlencoded",
 	}
 
-	return request(method, endpoint, header, data)
+	return request(method, endpoint, header, nil)
 }
 
 func (s *Spotify) Connect(playlist string) {
@@ -174,13 +204,16 @@ func (s *Spotify) Play(songID string) {
 	// "context_uri": {"spotify:playlist:4q8AuM0B1mSwtkhNijlze4"},
 	// "uris":        []string{"spotify:track:4iV5W9uYEdYUVa79Axb7Rh"},
 	//}
-	data := strings.NewReader(`{
-		"context_uri": {"spotify:playlist:"},
-		"offset":      {{"position": 0}},
-		"position_ms": {0},
-	}`)
+	data := RequestData{
+		rtype: RequestTypeValues,
+		text: `{
+			"context_uri": {"spotify:playlist:4iV5W9uYEdYUVa79Axb7Rh"},
+			"offset":      {{"position": 0}},
+			"position_ms": {0},
+		}`,
+	}
 
-	a := s.run("PUT", "https://api.spotify.com/v1/me/player/play", data)
+	a := s.run("PUT", "https://api.spotify.com/v1/me/player/play", &data)
 	fmt.Println(a)
 	fmt.Println(s.playlist)
 }
