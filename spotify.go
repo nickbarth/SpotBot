@@ -204,12 +204,11 @@ func (s *Spotify) Search(term string) *TrackJSON {
 func (s *Spotify) Play(songID string) {
 	data := RequestData{
 		rtype: RequestTypeString,
-		text:  "{\"context_uri\":\"spotify:album:5ht7ItJgpBH7W6vJ5BqpPr\",\"offset\":{\"position\":5},\"position_ms\":0}",
+		text:  `{"uris":["spotify:track:` + songID + `"],"offset":{"position":0},"position_ms":0}`,
+		// text:  `{"uris":["spotify:track:4iV5W9uYEdYUVa79Axb7Rh"],"context_uri":"spotify:album:5ht7ItJgpBH7W6vJ5BqpPr","offset":{"position":0},"position_ms":0}`,
 	}
 
-	a := s.run("PUT", "https://api.spotify.com/v1/me/player/play", &data)
-	fmt.Println(a)
-	fmt.Println(s.playlist)
+	s.run("PUT", "https://api.spotify.com/v1/me/player/play", &data)
 }
 
 func (s *Spotify) Pause() {
