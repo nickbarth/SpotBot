@@ -175,7 +175,11 @@ func (s *Spotify) run(method string, endpoint string, data *RequestData) string 
 		"Content-Type":  "application/x-www-form-urlencoded",
 	}
 
-	return request(method, endpoint, header, nil)
+	if data != nil && data.rtype == RequestTypeString {
+		header["Content-Type"] = "application/json"
+	}
+
+	return request(method, endpoint, header, data)
 }
 
 func (s *Spotify) Connect(playlist string) {
@@ -198,19 +202,9 @@ func (s *Spotify) Search(term string) *TrackJSON {
 }
 
 func (s *Spotify) Play(songID string) {
-
-	//data := url.Values{
-	// "uris": []string{"spotify:track:4iV5W9uYEdYUVa79Axb7Rh"},
-	// "context_uri": {"spotify:playlist:4q8AuM0B1mSwtkhNijlze4"},
-	// "uris":        []string{"spotify:track:4iV5W9uYEdYUVa79Axb7Rh"},
-	//}
 	data := RequestData{
-		rtype: RequestTypeValues,
-		text: `{
-			"context_uri": {"spotify:playlist:4iV5W9uYEdYUVa79Axb7Rh"},
-			"offset":      {{"position": 0}},
-			"position_ms": {0},
-		}`,
+		rtype: RequestTypeString,
+		text:  "{\"context_uri\":\"spotify:album:5ht7ItJgpBH7W6vJ5BqpPr\",\"offset\":{\"position\":5},\"position_ms\":0}",
 	}
 
 	a := s.run("PUT", "https://api.spotify.com/v1/me/player/play", &data)
@@ -248,9 +242,5 @@ func (s *Spotify) Current() string {
 	body := s.run("GET", "https://api.spotify.com/v1/me/player/currently-playing", nil)
 	json.Unmarshal([]byte(body), &song)
 
-	// fmt.Println(body)
-	fmt.Println(song)
-	return "hi"
-	// fmt.Println(song.Item.Name, " - ", song.Item.Artists[0].Name)
-	//return song.Item.Artists[0].Name + " - " + song.Item.Name
+	return song.Item.Artists[0].Name + " - " + song.Item.Name
 }
