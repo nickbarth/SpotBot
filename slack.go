@@ -117,6 +117,8 @@ func (s *SlackBot) Listen() {
 
 				if handler, ok := s.commands[command]; ok {
 					s.Send(handler(strings.Join(args[2:], " ")), message.Channel)
+				} else {
+					s.Send(s.commands["default"](""), message.Channel)
 				}
 			}
 		}
