@@ -3,63 +3,15 @@ package main
 import (
 	"fmt"
 	"log"
-	"strings"
 )
 
 const SLACK_API_KEY = ""
 const SPOTIFY_CLIENT_AUTH = ""
 const SPOTIFY_REFRESH_TOKEN = ""
-const SPOTIFY_DEVICE = ""
 const PLAYLIST_ID = ""
+const SPOTIFY_DEVICE = ""
 
 var spotify Spotify
-
-func handler(s *SlackBot, message MessageJSON) {
-	if strings.HasPrefix(message.Text, s.user) {
-		fmt.Println("Message Received:", message.Text)
-
-		args := strings.Split(message.Text, " ")
-		command := args[1]
-
-		switch command {
-		case "current":
-			s.Send(`_Currently Playing "`+spotify.Current()+`"_`, message.Channel)
-		case "play":
-			song := spotify.Search(strings.Join(args[2:], " "))
-			if song == nil {
-				s.Send(`_Song "`+strings.Join(args[2:], " ")+`" Not Found._`, message.Channel)
-			} else {
-				name := song.Artists[0].Name + " - " + song.Name
-				s.Send(`_Now Playing "`+name+`"_`, message.Channel)
-			}
-		case "add":
-			song := spotify.Search(strings.Join(args[2:], " "))
-			if song == nil {
-				s.Send(`_Song "`+strings.Join(args[2:], " ")+`" Not Found._`, message.Channel)
-			} else {
-				name := song.Artists[0].Name + " - " + song.Name
-				s.Send(`_Song "`+name+`" Was Added._`, message.Channel)
-			}
-		case "pause":
-			s.Send(`_Pausing Spotify..._`, message.Channel)
-			spotify.Pause()
-		case "resume":
-			s.Send(`_Resuming Spotify..._`, message.Channel)
-			spotify.Resume()
-		case "skip":
-			s.Send(`_Skipping Song..._`, message.Channel)
-			spotify.Skip()
-		case "last":
-			s.Send(`_Playing Previous..._`, message.Channel)
-			spotify.Last()
-		case "restart":
-			s.Send(`_Restarting Song..._`, message.Channel)
-			spotify.Restart()
-		case "joke":
-			s.Send(Joke{}.Get(), message.Channel)
-		}
-	}
-}
 
 func main() {
 	log.SetFlags(log.Flags() &^ (log.Ldate | log.Ltime))
@@ -71,10 +23,119 @@ func main() {
 		playlist: PLAYLIST_ID,
 	}
 
-	fmt.Println(spotify.Current())
+	spotify.Connect()
 
-	// spotify.Pause()
-	// slackbot := SlackBot{}
-	// slackbot.Connect("https://slack.com/api/rtm.start?token=" + SLACK_API_KEY)
-	// slackbot.Subscribe(handler)
+	slackbot := SlackBot{}
+	slackbot.Connect("https://slack.com/api/rtm.start?token=" + SLACK_API_KEY)
+
+	slackbot.Command("default", func(args string) string {
+		return `_I'm sorry. I'm afraid I can't do that._`
+	})
+
+	slackbot.Command("current", func(args string) string {
+		current, err := spotify.Current()
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		}
+		return `_Currently Playing "` + current + `"_`
+	})
+
+	slackbot.Command("play", func(name string) string {
+		if name == "" {
+			err := spotify.Resume()
+			if err != nil {
+				return `_Error ` + err.Error() + `_`
+			}
+			return `_Resuming Spotify..._`
+		}
+
+		song, err := spotify.Search(name)
+
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		}
+
+		if song == nil {
+			return `_Song "` + name + `" Not Found._`
+		} else {
+			err = spotify.PlayAdd(song.URI)
+
+			if err != nil {
+				return `_Error ` + err.Error() + `_`
+			}
+
+			name := song.Artists[0].Name + " - " + song.Name
+			return `_Now Playing "` + name + `"_`
+		}
+	})
+
+	slackbot.Command("add", func(name string) string {
+		if name == "" {
+			return `_No Song Specified._`
+		}
+
+		song, err := spotify.Search(name)
+
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		} else if song == nil {
+			return `_Song "` + name + `" Not Found._`
+		} else {
+			err = spotify.AddUnique(song.URI)
+
+			if err != nil {
+				return `_Error ` + err.Error() + `_`
+			}
+
+			name := song.Artists[0].Name + " - " + song.Name
+			return `_Song "` + name + `" Was Added._`
+		}
+	})
+
+	slackbot.Command("pause", func(args string) string {
+		err := spotify.Pause()
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		}
+		return `_Pausing Spotify..._`
+	})
+
+	slackbot.Command("resume", func(args string) string {
+		err := spotify.Resume()
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		}
+		return `_Resuming Spotify..._`
+	})
+
+	slackbot.Command("next", func(args string) string {
+		err := spotify.Skip()
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		}
+		return `_Skipping Song..._`
+	})
+
+	slackbot.Command("last", func(args string) string {
+		err := spotify.Last()
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		}
+		return `_Playing Previous..._`
+	})
+
+	slackbot.Command("restart", func(args string) string {
+		err := spotify.Restart()
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		}
+		return `_Restarting Song..._`
+	})
+
+	slackbot.Command("joke", func(args string) string {
+		return Joke{}.Get()
+	})
+
+	fmt.Println("Listening...")
+	slackbot.Listen()
 }

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type RequestDataType int
@@ -86,6 +87,15 @@ type ErrorJSON struct {
 	} `json:"error"`
 }
 
+type apiError struct {
+	status int
+	prob   string
+}
+
+func (e *apiError) Error() string {
+	return fmt.Sprintf("%d - %s", e.status, e.prob)
+}
+
 func openBrowser(url string) {
 	var err error
 	err = exec.Command("open", url).Start()
@@ -95,7 +105,7 @@ func openBrowser(url string) {
 	}
 }
 
-func request(method string, address string, header map[string]string, data *RequestData) string {
+func request(method string, address string, header http.Header, data *RequestData) string {
 	client := &http.Client{}
 	var err error
 	var req *http.Request
@@ -115,9 +125,7 @@ func request(method string, address string, header map[string]string, data *Requ
 		log.Fatal(err)
 	}
 
-	for key, val := range header {
-		req.Header.Add(key, val)
-	}
+	req.Header = header
 
 	resp, err := client.Do(req)
 
@@ -141,14 +149,15 @@ type Spotify struct {
 	refresh  string
 	playlist string
 	device   string
+	timeout  time.Time
 }
 
 func (s *Spotify) getTokenFromRefresh(code string) TokenJSON {
 	var token TokenJSON
 
-	header := map[string]string{
-		"Authorization": "Basic " + s.client,
-		"Content-Type":  "application/x-www-form-urlencoded",
+	header := http.Header{
+		"Authorization": {"Basic " + s.client},
+		"Content-Type":  {"application/x-www-form-urlencoded"},
 	}
 
 	data := RequestData{
@@ -170,9 +179,9 @@ func (s *Spotify) getTokenFromRefresh(code string) TokenJSON {
 func (s *Spotify) getToken(code string) TokenJSON {
 	var token TokenJSON
 
-	header := map[string]string{
-		"Authorization": "Basic " + s.client,
-		"Content-Type":  "application/x-www-form-urlencoded",
+	header := http.Header{
+		"Authorization": {"Basic " + s.client},
+		"Content-Type":  {"application/x-www-form-urlencoded"},
 	}
 
 	data := RequestData{
@@ -192,14 +201,22 @@ func (s *Spotify) getToken(code string) TokenJSON {
 	return token
 }
 
-func (s *Spotify) run(method string, endpoint string, data *RequestData) string {
-	header := map[string]string{
-		"Authorization": "Bearer " + s.token,
-		"Content-Type":  "application/x-www-form-urlencoded",
+func (s *Spotify) run(method string, endpoint string, data *RequestData) (string, error) {
+	if s.token == "" {
+		return "", &apiError{401, "Authorization Header Required"}
+	}
+
+	if time.Now().After(s.timeout) {
+		s.Connect()
+	}
+
+	header := http.Header{
+		"Authorization": {"Bearer " + s.token},
+		"Content-Type":  {"application/x-www-form-urlencoded"},
 	}
 
 	if data != nil && data.rtype == RequestTypeString {
-		header["Content-Type"] = "application/json"
+		header.Set("Content-Type", "application/json")
 	}
 
 	var spotErr ErrorJSON
@@ -207,38 +224,57 @@ func (s *Spotify) run(method string, endpoint string, data *RequestData) string 
 	err := json.Unmarshal([]byte(body), &spotErr)
 
 	if err == nil && spotErr.Error.Status != 0 {
-		log.Fatal(spotErr.Error.Status, " - ", spotErr.Error.Message)
+		return "", &apiError{spotErr.Error.Status, spotErr.Error.Message}
 	}
 
-	return body
+	return body, nil
 }
 
 func (s *Spotify) Connect() {
 	token := s.getTokenFromRefresh(s.refresh)
 	s.token = token.Code
+	s.timeout = time.Now().Add(time.Second * time.Duration(token.Expires))
 }
 
-func (s *Spotify) Search(term string) *TrackJSON {
+func (s *Spotify) Search(term string) (*TrackJSON, error) {
 	var search SearchJSON
 
 	p := url.Values{"type": {"track"}, "q": {term}}
-	body := s.run("GET", "https://api.spotify.com/v1/search?"+p.Encode(), nil)
-	json.Unmarshal([]byte(body), &search)
+	body, err := s.run("GET", "https://api.spotify.com/v1/search?"+p.Encode(), nil)
 
-	if len(search.Search.Tracks) == 0 {
-		return nil
+	if err != nil {
+		return nil, err
 	}
 
-	return &search.Search.Tracks[0]
+	err = json.Unmarshal([]byte(body), &search)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(search.Search.Tracks) == 0 {
+		return nil, err
+	}
+
+	return &search.Search.Tracks[0], nil
 }
 
-func (s *Spotify) Play(uid string) {
-	s.AddUnique(uid)
-	index := strconv.Itoa(s.Index(uid))
+func (s *Spotify) PlayAdd(uid string) error {
+	err := s.AddUnique(uid)
+
+	if err != nil {
+		return err
+	}
+
+	index, err := s.Index(uid)
+
+	if err != nil {
+		return err
+	}
 
 	data := RequestData{
 		rtype: RequestTypeString,
-		text:  `{"context_uri":"spotify:playlist:` + s.playlist + `","offset":{"position":` + index + `},"position_ms":0}`,
+		text:  `{"context_uri":"spotify:playlist:` + s.playlist + `","offset":{"position":` + strconv.Itoa(index) + `},"position_ms":0}`,
 	}
 
 	query := ""
@@ -246,118 +282,157 @@ func (s *Spotify) Play(uid string) {
 		query = "device_id=" + s.device
 	}
 
-	s.run("PUT", "https://api.spotify.com/v1/me/player/play?"+query, &data)
+	_, err = s.run("PUT", "https://api.spotify.com/v1/me/player/play?"+query, &data)
+	return err
 }
 
-func (s *Spotify) PlaySong(uri string) {
+func (s *Spotify) PlaySong(uri string) error {
 	data := RequestData{
 		rtype: RequestTypeString,
 		text:  `{"uris":["` + uri + `"],"offset":{"position":0},"position_ms":0}`,
 	}
 
-	s.run("PUT", "https://api.spotify.com/v1/me/player/play", &data)
+	_, err := s.run("PUT", "https://api.spotify.com/v1/me/player/play", &data)
+	return err
 }
 
-func (s *Spotify) Pause() {
-	s.run("POST", "https://api.spotify.com/v1/me/player/pause", nil)
+func (s *Spotify) Pause() error {
+	_, err := s.run("PUT", "https://api.spotify.com/v1/me/player/pause", nil)
+	return err
 }
 
-func (s *Spotify) Resume() {
-	s.run("POST", "https://api.spotify.com/v1/me/player/play", nil)
+func (s *Spotify) Resume() error {
+	_, err := s.run("PUT", "https://api.spotify.com/v1/me/player/play", nil)
+	return err
 }
 
-func (s *Spotify) Skip() {
-	s.run("POST", "https://api.spotify.com/v1/me/player/next", nil)
+func (s *Spotify) Skip() error {
+	_, err := s.run("POST", "https://api.spotify.com/v1/me/player/next", nil)
+	return err
 }
 
-func (s *Spotify) Last() {
-	s.run("POST", "https://api.spotify.com/v1/me/player/previous", nil)
+func (s *Spotify) Last() error {
+	_, err := s.run("POST", "https://api.spotify.com/v1/me/player/previous", nil)
+	return err
 }
 
-func (s *Spotify) Add(uri string) {
+func (s *Spotify) Add(uri string) error {
 	p := url.Values{"uris": {uri}, "position": {"0"}}
-	s.run("POST", "https://api.spotify.com/v1/playlists/"+s.playlist+"/tracks?"+p.Encode(), nil)
+	_, err := s.run("POST", "https://api.spotify.com/v1/playlists/"+s.playlist+"/tracks?"+p.Encode(), nil)
+	return err
 }
 
-func (s *Spotify) Tracks() []TrackJSON {
+func (s *Spotify) Tracks() ([]TrackJSON, error) {
 	var playlist PlaylistJSON
 	tracks := []TrackJSON{}
 
 	p := url.Values{"fields": {"items(track(id,name,uri))"}}
-	body := s.run("GET", "https://api.spotify.com/v1/playlists/"+s.playlist+"/tracks?"+p.Encode(), nil)
+	body, _ := s.run("GET", "https://api.spotify.com/v1/playlists/"+s.playlist+"/tracks?"+p.Encode(), nil)
 	err := json.Unmarshal([]byte(body), &playlist)
 
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	for _, item := range playlist.Items {
 		tracks = append(tracks, item.Track)
 	}
 
-	return tracks
+	return tracks, nil
 }
 
-func (s *Spotify) Contains(uri string) bool {
-	for _, track := range s.Tracks() {
-		if track.URI == uri {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (s *Spotify) Index(uri string) int {
-	for index, track := range s.Tracks() {
-		if track.URI == uri {
-			return index
-		}
-	}
-
-	return -1
-}
-
-func (s *Spotify) AddUnique(uri string) {
-	if !s.Contains(uri) {
-		s.Add(uri)
-	}
-}
-
-func (s *Spotify) Volume(volume string) {
-	s.run("PUT", "https://api.spotify.com/v1/me/player/volume?volume_percent="+volume, nil)
-}
-
-func (s *Spotify) Restart() {
-	s.run("PUT", "https://api.spotify.com/v1/me/player/seek?position_ms=0", nil)
-}
-
-func (s *Spotify) Devices() []DeviceJSON {
-	var devices DevicesJSON
-	body := s.run("GET", "https://api.spotify.com/v1/me/player/devices", nil)
-	err := json.Unmarshal([]byte(body), &devices)
+func (s *Spotify) Contains(uri string) (bool, error) {
+	tracks, err := s.Tracks()
 
 	if err != nil {
-		log.Fatal(err)
+		return false, err
 	}
 
-	return devices.Items
+	for _, track := range tracks {
+		if track.URI == uri {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
-func (s *Spotify) Current() string {
+func (s *Spotify) Index(uri string) (int, error) {
+	tracks, err := s.Tracks()
+
+	if err != nil {
+		return -1, err
+	}
+
+	for index, track := range tracks {
+		if track.URI == uri {
+			return index, nil
+		}
+	}
+
+	return -1, nil
+}
+
+func (s *Spotify) AddUnique(uri string) error {
+	added, err := s.Contains(uri)
+
+	if err != nil {
+		return err
+	}
+
+	if !added {
+		err = s.Add(uri)
+		return err
+	}
+
+	return nil
+}
+
+func (s *Spotify) Volume(volume string) error {
+	_, err := s.run("PUT", "https://api.spotify.com/v1/me/player/volume?volume_percent="+volume, nil)
+	return err
+}
+
+func (s *Spotify) Restart() error {
+	_, err := s.run("PUT", "https://api.spotify.com/v1/me/player/seek?position_ms=0", nil)
+	return err
+}
+
+func (s *Spotify) Devices() ([]DeviceJSON, error) {
+	var devices DevicesJSON
+	body, err := s.run("GET", "https://api.spotify.com/v1/me/player/devices", nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal([]byte(body), &devices)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return devices.Items, nil
+}
+
+func (s *Spotify) Current() (string, error) {
 	var song CurrentJSON
 
-	body := s.run("GET", "https://api.spotify.com/v1/me/player/currently-playing", nil)
-
-	if body == "" {
-		return "Nothing - No One"
-	}
-
-	err := json.Unmarshal([]byte(body), &song)
+	body, err := s.run("GET", "https://api.spotify.com/v1/me/player/currently-playing", nil)
 
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
-	return song.Track.Artists[0].Name + " - " + song.Track.Name
+	if body == "" {
+		return "Nothing - No One", nil
+	}
+
+	err = json.Unmarshal([]byte(body), &song)
+
+	if err != nil {
+		return "", err
+	}
+
+	return song.Track.Artists[0].Name + " - " + song.Track.Name, nil
 }

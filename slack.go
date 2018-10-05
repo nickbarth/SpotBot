@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"golang.org/x/net/websocket"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 )
 
 type StreamJSON struct {
@@ -23,12 +25,15 @@ type MessageJSON struct {
 }
 
 type SlackBot struct {
-	user string
-	ws   *websocket.Conn
+	user     string
+	ws       *websocket.Conn
+	commands map[string]func(string) string
 }
 
 func (s *SlackBot) Connect(url string) {
 	var stream StreamJSON
+
+	s.commands = map[string]func(string) string{}
 
 	resp, err := http.Get(url)
 
@@ -87,14 +92,33 @@ func (s *SlackBot) Send(message string, channel string) {
 	}
 }
 
-func (s *SlackBot) Subscribe(fn func(*SlackBot, MessageJSON)) {
+func (s *SlackBot) Command(command string, fn func(string) string) {
+	s.commands[command] = fn
+}
+
+func (s *SlackBot) Listen() {
 	messages := make(chan MessageJSON)
 	go s.receive(messages)
 
 	for {
 		select {
 		case message := <-messages:
-			fn(s, message)
+			if strings.HasPrefix(message.Text, s.user) {
+				fmt.Println("Message Received:", message.Text)
+
+				args := strings.Split(message.Text, " ")
+
+				if len(args) < 2 {
+					s.Send(s.commands["default"](""), message.Channel)
+					return
+				}
+
+				command := args[1]
+
+				if handler, ok := s.commands[command]; ok {
+					s.Send(handler(strings.Join(args[2:], " ")), message.Channel)
+				}
+			}
 		}
 	}
 }
