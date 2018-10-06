@@ -58,6 +58,10 @@ type TrackJSON struct {
 	URI     string       `json:"uri"`
 }
 
+func (t TrackJSON) Title() string {
+	return t.Artists[0].Name + " - " + t.Name
+}
+
 type DeviceJSON struct {
 	ID     string `json:"id"`
 	Active bool   `json:"is_active"`
@@ -322,6 +326,15 @@ func (s *Spotify) Add(uri string) error {
 	return err
 }
 
+func (s *Spotify) Remove(uri string) error {
+	data := RequestData{
+		rtype: RequestTypeString,
+		text:  `{"tracks":[{"uri":"` + uri + `"}]}`,
+	}
+	_, err := s.run("DELETE", "https://api.spotify.com/v1/playlists/"+s.playlist+"/tracks", &data)
+	return err
+}
+
 func (s *Spotify) Tracks() ([]TrackJSON, error) {
 	var playlist PlaylistJSON
 	tracks := []TrackJSON{}
@@ -415,24 +428,26 @@ func (s *Spotify) Devices() ([]DeviceJSON, error) {
 	return devices.Items, nil
 }
 
-func (s *Spotify) Current() (string, error) {
+func (s *Spotify) Current() (*TrackJSON, error) {
 	var song CurrentJSON
 
 	body, err := s.run("GET", "https://api.spotify.com/v1/me/player/currently-playing", nil)
 
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if body == "" {
-		return "Nothing - No One", nil
+		return &TrackJSON{Name: "Nothing", Artists: []ArtistJSON{
+			ArtistJSON{Name: "No One"},
+		}}, nil
 	}
 
 	err = json.Unmarshal([]byte(body), &song)
 
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return song.Track.Artists[0].Name + " - " + song.Track.Name, nil
+	return &song.Track, nil
 }

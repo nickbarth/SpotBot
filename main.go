@@ -37,7 +37,7 @@ func main() {
 		if err != nil {
 			return `_Error ` + err.Error() + `_`
 		}
-		return `_Currently Playing "` + current + `"_`
+		return `_Currently Playing "` + current.Title() + `"_`
 	})
 
 	slackbot.Command("play", func(name string) string {
@@ -64,8 +64,7 @@ func main() {
 				return `_Error ` + err.Error() + `_`
 			}
 
-			name := song.Artists[0].Name + " - " + song.Name
-			return `_Now Playing "` + name + `"_`
+			return `_Now Playing "` + song.Title() + `"_`
 		}
 	})
 
@@ -87,8 +86,41 @@ func main() {
 				return `_Error ` + err.Error() + `_`
 			}
 
-			name := song.Artists[0].Name + " - " + song.Name
-			return `_Song "` + name + `" Was Added._`
+			return `_Song "` + song.Title() + `" Was Added._`
+		}
+	})
+
+	slackbot.Command("remove", func(name string) string {
+		if name == "" {
+			return `_No Song Specified._`
+		}
+
+		song, err := spotify.Search(name)
+
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		} else if song == nil {
+			return `_Song "` + name + `" Not Found._`
+		} else {
+			err = spotify.Remove(song.URI)
+
+			if err != nil {
+				return `_Error ` + err.Error() + `_`
+			}
+
+			current, err := spotify.Current()
+			if err != nil {
+				return `_Error ` + err.Error() + `_`
+			}
+
+			if current.ID == song.ID {
+				err := spotify.Skip()
+				if err != nil {
+					return `_Error ` + err.Error() + `_`
+				}
+			}
+
+			return `_Song "` + song.Title() + `" Was Removed._`
 		}
 	})
 
