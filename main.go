@@ -25,6 +25,17 @@ func main() {
 
 	spotify.Connect()
 
+	//spotify.Tracks()
+	//fmt.Println("yes")
+
+	song, _ := spotify.Current()
+	fmt.Println(song)
+	// _, _ = spotify.Index(song.Title())
+
+	index, _ := spotify.Index("I Write Sins Not Tragedies")
+	fmt.Println(index)
+	return
+
 	slackbot := SlackBot{}
 	slackbot.Connect("https://slack.com/api/rtm.start?token=" + SLACK_API_KEY)
 

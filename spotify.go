@@ -51,11 +51,17 @@ type ContextJSON struct {
 	URI  string `json:"uri"`
 }
 
+type UserJSON struct {
+	ID   string `json:"id"`
+	Name string `json:"display_name"`
+}
+
 type TrackJSON struct {
 	Artists []ArtistJSON `json:"artists"`
 	Name    string       `json:"name"`
 	ID      string       `json:"id"`
 	URI     string       `json:"uri"`
+	User    UserJSON     `json:"added_by"`
 }
 
 func (t TrackJSON) Title() string {
@@ -81,6 +87,7 @@ type CurrentJSON struct {
 type PlaylistJSON struct {
 	Items []struct {
 		Track TrackJSON `json:"track"`
+		User  UserJSON  `json:"added_by"`
 	} `json:"items"`
 }
 
@@ -315,6 +322,23 @@ func (s *Spotify) Skip() error {
 	return err
 }
 
+func (s *Spotify) User(id string) (*UserJSON, error) {
+	var user UserJSON
+	body, err := s.run("GET", "https://api.spotify.com/v1/users/"+id, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal([]byte(body), &user)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
 func (s *Spotify) Last() error {
 	_, err := s.run("POST", "https://api.spotify.com/v1/me/player/previous", nil)
 	return err
@@ -339,8 +363,11 @@ func (s *Spotify) Tracks() ([]TrackJSON, error) {
 	var playlist PlaylistJSON
 	tracks := []TrackJSON{}
 
-	p := url.Values{"fields": {"items(track(id,name,uri))"}}
+	p := url.Values{"fields": {"total,next,items(added_by,track(id,name,uri))"}}
 	body, _ := s.run("GET", "https://api.spotify.com/v1/playlists/"+s.playlist+"/tracks?"+p.Encode(), nil)
+
+	fmt.Println(body)
+
 	err := json.Unmarshal([]byte(body), &playlist)
 
 	if err != nil {
@@ -348,6 +375,8 @@ func (s *Spotify) Tracks() ([]TrackJSON, error) {
 	}
 
 	for _, item := range playlist.Items {
+		item.Track.User = item.User
+		// fmt.Println(item.Track.User, item.User)
 		tracks = append(tracks, item.Track)
 	}
 
@@ -378,12 +407,37 @@ func (s *Spotify) Index(uri string) (int, error) {
 	}
 
 	for index, track := range tracks {
-		if track.URI == uri {
+		fmt.Println(uri, "|", track.Name)
+		if track.Name == uri {
 			return index, nil
 		}
 	}
 
+	fmt.Println("not found")
 	return -1, nil
+}
+
+func (s *Spotify) Blame(uri string) (*UserJSON, error) {
+	tracks, err := s.Tracks()
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, track := range tracks {
+		// fmt.Println(track.User)
+		if track.Title() == uri {
+			fmt.Println("matched")
+			user, err := s.User(track.User.ID)
+			//fmt.Println(track.User.ID)
+			if err != nil {
+				return nil, err
+			}
+			return user, nil
+		}
+	}
+
+	return nil, nil
 }
 
 func (s *Spotify) AddUnique(uri string) error {
