@@ -25,17 +25,6 @@ func main() {
 
 	spotify.Connect()
 
-	//spotify.Tracks()
-	//fmt.Println("yes")
-
-	song, _ := spotify.Current()
-	fmt.Println(song)
-	// _, _ = spotify.Index(song.Title())
-
-	index, _ := spotify.Index("I Write Sins Not Tragedies")
-	fmt.Println(index)
-	return
-
 	slackbot := SlackBot{}
 	slackbot.Connect("https://slack.com/api/rtm.start?token=" + SLACK_API_KEY)
 
@@ -99,6 +88,37 @@ func main() {
 
 			return `_Song "` + song.Title() + `" Was Added._`
 		}
+	})
+
+	slackbot.Command("blame", func(name string) string {
+		var song *TrackJSON
+		var err error
+
+		if name == "" {
+			song, err = spotify.Current()
+		} else {
+			song, err = spotify.Search(name)
+		}
+
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		}
+
+		if song == nil {
+			return `_Song "` + name + `" Not Found._`
+		}
+
+		user, err := spotify.Blame(song.URI)
+
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		}
+
+		if user.Name == "" {
+			user.Name = "uknown"
+		}
+
+		return `_"` + song.Title() + `" was added by ` + user.Name + `._`
 	})
 
 	slackbot.Command("remove", func(name string) string {

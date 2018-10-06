@@ -85,6 +85,7 @@ type CurrentJSON struct {
 }
 
 type PlaylistJSON struct {
+	Next  *string `json:"next"`
 	Items []struct {
 		Track TrackJSON `json:"track"`
 		User  UserJSON  `json:"added_by"`
@@ -364,20 +365,31 @@ func (s *Spotify) Tracks() ([]TrackJSON, error) {
 	tracks := []TrackJSON{}
 
 	p := url.Values{"fields": {"total,next,items(added_by,track(id,name,uri))"}}
-	body, _ := s.run("GET", "https://api.spotify.com/v1/playlists/"+s.playlist+"/tracks?"+p.Encode(), nil)
+	uri := "https://api.spotify.com/v1/playlists/" + s.playlist + "/tracks?" + p.Encode()
 
-	fmt.Println(body)
+	for {
+		body, err := s.run("GET", uri, nil)
 
-	err := json.Unmarshal([]byte(body), &playlist)
+		if err != nil {
+			return nil, err
+		}
 
-	if err != nil {
-		return nil, err
-	}
+		err = json.Unmarshal([]byte(body), &playlist)
 
-	for _, item := range playlist.Items {
-		item.Track.User = item.User
-		// fmt.Println(item.Track.User, item.User)
-		tracks = append(tracks, item.Track)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, item := range playlist.Items {
+			item.Track.User = item.User
+			tracks = append(tracks, item.Track)
+		}
+
+		if playlist.Next != nil {
+			uri = *playlist.Next
+		} else {
+			break
+		}
 	}
 
 	return tracks, nil
@@ -407,13 +419,11 @@ func (s *Spotify) Index(uri string) (int, error) {
 	}
 
 	for index, track := range tracks {
-		fmt.Println(uri, "|", track.Name)
 		if track.Name == uri {
 			return index, nil
 		}
 	}
 
-	fmt.Println("not found")
 	return -1, nil
 }
 
@@ -425,11 +435,8 @@ func (s *Spotify) Blame(uri string) (*UserJSON, error) {
 	}
 
 	for _, track := range tracks {
-		// fmt.Println(track.User)
-		if track.Title() == uri {
-			fmt.Println("matched")
+		if track.URI == uri {
 			user, err := s.User(track.User.ID)
-			//fmt.Println(track.User.ID)
 			if err != nil {
 				return nil, err
 			}
