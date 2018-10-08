@@ -298,6 +298,31 @@ func (s *Spotify) PlayAdd(uid string) error {
 	return err
 }
 
+func (s *Spotify) PlaylistPlay(uid string) error {
+	index, err := s.Index(uid)
+
+	if err != nil {
+		return err
+	}
+
+	if index == -1 {
+		return &apiError{404, "Not found in Playlist."}
+	}
+
+	data := RequestData{
+		rtype: RequestTypeString,
+		text:  `{"context_uri":"spotify:playlist:` + s.playlist + `","offset":{"position":` + strconv.Itoa(index) + `},"position_ms":0}`,
+	}
+
+	query := ""
+	if s.device != "" {
+		query = "device_id=" + s.device
+	}
+
+	_, err = s.run("PUT", "https://api.spotify.com/v1/me/player/play?"+query, &data)
+	return err
+}
+
 func (s *Spotify) PlaySong(uri string) error {
 	data := RequestData{
 		rtype: RequestTypeString,
@@ -419,7 +444,7 @@ func (s *Spotify) Index(uri string) (int, error) {
 	}
 
 	for index, track := range tracks {
-		if track.Name == uri {
+		if track.URI == uri {
 			return index, nil
 		}
 	}
