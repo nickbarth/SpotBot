@@ -58,7 +58,7 @@ func main() {
 		if song == nil {
 			return `_Song "` + name + `" Not Found._`
 		} else {
-			err = spotify.PlayAdd(song.URI)
+			err = spotify.PlaylistPlay(song.URI)
 
 			if err != nil {
 				return `_Error ` + err.Error() + `_`
@@ -155,13 +155,15 @@ func main() {
 		}
 	})
 
-	slackbot.Command("pause", func(args string) string {
+	pause := func(args string) string {
 		err := spotify.Pause()
 		if err != nil {
 			return `_Error ` + err.Error() + `_`
 		}
 		return `_Pausing Spotify..._`
-	})
+	}
+	slackbot.Command("pause", pause)
+	slackbot.Command("stop", pause)
 
 	slackbot.Command("resume", func(args string) string {
 		err := spotify.Resume()
@@ -171,21 +173,25 @@ func main() {
 		return `_Resuming Spotify..._`
 	})
 
-	slackbot.Command("next", func(args string) string {
+	next := func(args string) string {
 		err := spotify.Skip()
 		if err != nil {
 			return `_Error ` + err.Error() + `_`
 		}
 		return `_Skipping Song..._`
-	})
+	}
+	slackbot.Command("next", next)
+	slackbot.Command("skip", next)
 
-	slackbot.Command("last", func(args string) string {
+	previous := func(args string) string {
 		err := spotify.Last()
 		if err != nil {
 			return `_Error ` + err.Error() + `_`
 		}
 		return `_Playing Previous..._`
-	})
+	}
+	slackbot.Command("previous", previous)
+	slackbot.Command("last", previous)
 
 	slackbot.Command("restart", func(args string) string {
 		err := spotify.Restart()
@@ -193,6 +199,14 @@ func main() {
 			return `_Error ` + err.Error() + `_`
 		}
 		return `_Restarting Song..._`
+	})
+
+	slackbot.Command("volume", func(args string) string {
+		err := spotify.Volume(args)
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		}
+		return `_Setting Volume..._`
 	})
 
 	slackbot.Command("joke", func(args string) string {
