@@ -122,11 +122,14 @@ func main() {
 	})
 
 	slackbot.Command("remove", func(name string) string {
-		if name == "" {
-			return `_No Song Specified._`
-		}
+		var song *TrackJSON
+		var err error
 
-		song, err := spotify.Search(name)
+		if name == "" {
+			song, err = spotify.Current()
+		} else {
+			song, err = spotify.Search(name)
+		}
 
 		if err != nil {
 			return `_Error ` + err.Error() + `_`
