@@ -173,6 +173,20 @@ func main() {
 		return `_Resuming Spotify..._`
 	})
 
+	slackbot.Command("setup", func(args string) string {
+		err := spotify.Shuffle()
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		}
+
+		err = spotify.Repeat()
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		}
+
+		return `_Shuffle and Repeat Enabled._`
+	})
+
 	next := func(args string) string {
 		err := spotify.Skip()
 		if err != nil {

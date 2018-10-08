@@ -492,6 +492,16 @@ func (s *Spotify) Volume(volume string) error {
 	return err
 }
 
+func (s *Spotify) Shuffle() error {
+	_, err := s.run("PUT", "https://api.spotify.com/v1/me/player/shuffle?state=true", nil)
+	return err
+}
+
+func (s *Spotify) Repeat() error {
+	_, err := s.run("PUT", "https://api.spotify.com/v1/me/player/repeat?state=context", nil)
+	return err
+}
+
 func (s *Spotify) Restart() error {
 	_, err := s.run("PUT", "https://api.spotify.com/v1/me/player/seek?position_ms=0", nil)
 	return err
