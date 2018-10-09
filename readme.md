@@ -3,19 +3,22 @@ A Slack Spotify Bot in Go
 
 ### Commands
 ```
-> @spotbot current
-Currently Playing "Artist - Song"
+> @spotbot play toto africa
+Now Playing "Toto - Africa"
 
-> @spotbot play
-Playing Spotify...
+> @spotbot current
+Currently Playing "Toto - Africa"
 
 > @spotbot pause
 Pausing Spotify...
 
+> @spotbot resume
+Resuming Spotify...
+
 > @spotbot skip
 Skipping this song...
 
-> @spotbot play
+> @spotbot last
 Playing last song...
 
 > @spotbot restart
