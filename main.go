@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 )
 
 const SLACK_API_KEY = ""
@@ -31,6 +32,28 @@ func main() {
 	slackbot.Command("default", func(args string) string {
 		return `_I'm sorry. I'm afraid I can't do that._`
 	})
+
+	hello := func(args string) string {
+		hour := time.Now().Hour()
+		switch {
+		case hour < 12:
+			return `_Good Morning!_`
+		case hour == 12:
+			return `_Happy Lunch Time!_`
+		case hour > 12 && hour < 17:
+			return `_Good Afternoon!_`
+		default:
+			return `_Good Evening!_`
+		}
+	}
+	slackbot.Command("hi", hello)
+	slackbot.Command("hello", hello)
+
+	bye := func(args string) string {
+		return `_Goodbye!_`
+	}
+	slackbot.Command("bye", bye)
+	slackbot.Command("goodbye", bye)
 
 	slackbot.Command("current", func(args string) string {
 		current, err := spotify.Current()
