@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os/exec"
@@ -85,6 +86,7 @@ type CurrentJSON struct {
 }
 
 type PlaylistJSON struct {
+	Total int     `json:"total"`
 	Next  *string `json:"next"`
 	Items []struct {
 		Track TrackJSON `json:"track"`
@@ -383,6 +385,39 @@ func (s *Spotify) Remove(uri string) error {
 	}
 	_, err := s.run("DELETE", "https://api.spotify.com/v1/playlists/"+s.playlist+"/tracks", &data)
 	return err
+}
+
+func (s *Spotify) ShufflePlaylist() error {
+	var playlist PlaylistJSON
+
+	p := url.Values{"fields": {"total"}}
+	body, err := s.run("GET", "https://api.spotify.com/v1/playlists/"+s.playlist+"/tracks?"+p.Encode(), nil)
+
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal([]byte(body), &playlist)
+
+	if err != nil {
+		return err
+	}
+
+	order := rand.Perm(playlist.Total)
+
+	for index, position := range order {
+		data := RequestData{
+			rtype: RequestTypeString,
+			text:  `{"range_start":` + strconv.Itoa(index) + `,"insert_before":` + strconv.Itoa(position) + `}`,
+		}
+		_, err := s.run("PUT", "https://api.spotify.com/v1/playlists/"+s.playlist+"/tracks", &data)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *Spotify) Tracks() ([]TrackJSON, error) {

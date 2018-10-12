@@ -2,7 +2,6 @@ package main
 
 import (
 	"math/rand"
-	"time"
 )
 
 type Joke struct{}
@@ -80,7 +79,6 @@ var jokes = []string{
 }
 
 func (j Joke) Get() string {
-	rand.Seed(time.Now().Unix())
 	n := rand.Int() % len(jokes)
 	return jokes[n]
 }

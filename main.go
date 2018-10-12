@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"time"
 )
 
@@ -15,6 +16,7 @@ const SPOTIFY_DEVICE = ""
 var spotify Spotify
 
 func main() {
+	rand.Seed(time.Now().Unix())
 	log.SetFlags(log.Flags() &^ (log.Ldate | log.Ltime))
 
 	spotify = Spotify{
@@ -211,6 +213,15 @@ func main() {
 		}
 
 		return `_Shuffle and Repeat Enabled._`
+	})
+
+	slackbot.Command("shuffle", func(args string) string {
+		err := spotify.ShufflePlaylist()
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		}
+
+		return `_I shuffled your playlist._`
 	})
 
 	next := func(args string) string {
