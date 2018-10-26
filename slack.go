@@ -7,7 +7,9 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type StreamJSON struct {
@@ -26,8 +28,21 @@ type MessageJSON struct {
 
 type SlackBot struct {
 	user     string
+	id       int
 	ws       *websocket.Conn
 	commands map[string]func(string) string
+}
+
+type Ping struct {
+	Id   int    `json:"id"`
+	Type string `json:"type"`
+	Time int32  `json:"time"`
+}
+
+type Pong struct {
+	Reply int    `json:"reply_to"`
+	Type  string `json:"type"`
+	Time  int32  `json:"time"`
 }
 
 func (s *SlackBot) Connect(url string) {
@@ -58,6 +73,24 @@ func (s *SlackBot) Connect(url string) {
 
 	s.ws = ws
 	s.user = "<@" + stream.Self.ID + ">"
+	s.id, _ = strconv.Atoi(stream.Self.ID)
+}
+
+func (s *SlackBot) ping() {
+	ping := new(Ping)
+	ping.Id = s.id
+	ping.Type = "ping"
+
+	for {
+		ping.Time = int32(time.Now().Unix())
+		err := websocket.JSON.Send(s.ws, ping)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		time.Sleep(5 * time.Second)
+	}
 }
 
 func (s *SlackBot) receive(channel chan MessageJSON) {
@@ -71,7 +104,7 @@ func (s *SlackBot) receive(channel chan MessageJSON) {
 			log.Fatal(err)
 		}
 
-		json.Unmarshal([]byte(data), &message)
+		err = json.Unmarshal([]byte(data), &message)
 
 		if message.Type == "message" && message.Text != "" {
 			channel <- message
@@ -97,6 +130,8 @@ func (s *SlackBot) Command(command string, fn func(string) string) {
 }
 
 func (s *SlackBot) Listen() {
+	go s.ping()
+
 	messages := make(chan MessageJSON)
 	go s.receive(messages)
 
@@ -104,7 +139,7 @@ func (s *SlackBot) Listen() {
 		select {
 		case message := <-messages:
 			if strings.HasPrefix(message.Text, s.user) {
-				fmt.Println("Message Received:", message.Text)
+				fmt.Printf("Message Received: %+v\n", message)
 
 				args := strings.Split(message.Text, " ")
 
