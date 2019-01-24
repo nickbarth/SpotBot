@@ -89,7 +89,7 @@ func (s *SlackBot) ping() {
 			log.Fatal(err)
 		}
 
-		time.Sleep(5 * time.Second)
+		time.Sleep(60 * time.Second)
 	}
 }
 
@@ -139,7 +139,10 @@ func (s *SlackBot) Listen() {
 		select {
 		case message := <-messages:
 			if strings.HasPrefix(message.Text, s.user) {
-				fmt.Printf("Message Received: %+v\n", message)
+
+				if message.Type != "pong" {
+					fmt.Printf("Message Received: %+v\n", message)
+				}
 
 				args := strings.Split(message.Text, " ")
 

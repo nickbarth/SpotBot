@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"runtime"
+	"strings"
 	"time"
 )
 
@@ -15,6 +17,11 @@ const SPOTIFY_DEVICE = ""
 
 var spotify Spotify
 
+func idFromURI(uri string) string {
+	s := strings.Split(uri, ":")
+	return s[len(s)-1]
+}
+
 func main() {
 	rand.Seed(time.Now().Unix())
 	log.SetFlags(log.Flags() &^ (log.Ldate | log.Ltime))
@@ -22,8 +29,8 @@ func main() {
 	spotify = Spotify{
 		client:   SPOTIFY_CLIENT_AUTH,
 		refresh:  SPOTIFY_REFRESH_TOKEN,
-		device:   SPOTIFY_DEVICE,
 		playlist: PLAYLIST_ID,
+		// device:   SPOTIFY_DEVICE,
 	}
 
 	spotify.Connect()
@@ -63,6 +70,40 @@ func main() {
 			return `_Error ` + err.Error() + `_`
 		}
 		return `_Currently Playing "` + current.Title() + `"_`
+	})
+
+	slackbot.Command("playlist", func(pid string) string {
+		if pid == "" {
+			context, err := spotify.Context()
+
+			if err != nil {
+				return `_Error ` + err.Error() + `_`
+			}
+
+			pid = idFromURI(context.URI)
+			playlist, err := spotify.Playlist(pid)
+
+			if err != nil {
+				return `_Error ` + err.Error() + `_`
+			}
+
+			spotify.SetPlaylist(pid)
+			return `_We're on the "` + playlist.Name + `" Playlist._`
+		}
+
+		playlist, err := spotify.Playlist(pid)
+
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		}
+
+		err = spotify.ChangePlaylist(pid)
+
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		}
+
+		return `_We're on the "` + playlist.Name + `" Playlist._`
 	})
 
 	slackbot.Command("play", func(name string) string {
@@ -115,7 +156,7 @@ func main() {
 		}
 	})
 
-	slackbot.Command("blame", func(name string) string {
+	blame := func(name string) string {
 		var song *TrackJSON
 		var err error
 
@@ -139,12 +180,15 @@ func main() {
 			return `_Error ` + err.Error() + `_`
 		}
 
-		if user.Name == "" {
-			user.Name = "uknown"
+		if user == nil || user.Name == "" {
+			return `_ I don't know who "` + song.Title() + `" was added by._`
 		}
 
 		return `_"` + song.Title() + `" was added by ` + user.Name + `._`
-	})
+	}
+	slackbot.Command("song", blame)
+	slackbot.Command("blame", blame)
+	slackbot.Command("who", blame)
 
 	slackbot.Command("remove", func(name string) string {
 		var song *TrackJSON
@@ -266,4 +310,15 @@ func main() {
 
 	fmt.Println("Listening...")
 	slackbot.Listen()
+
+	if err := recover(); err != nil {
+		stack := make([]byte, 1024*8)
+		stack = stack[:runtime.Stack(stack, false)]
+
+		// f := "PANIC: %s\n%s"
+		// logger.Logger.Error().Printf(f, err, stack)
+		fmt.Println("PANIC")
+		fmt.Println(err)
+		fmt.Println(stack)
+	}
 }

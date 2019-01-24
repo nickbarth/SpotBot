@@ -48,8 +48,9 @@ type ArtistJSON struct {
 }
 
 type ContextJSON struct {
-	Type string `json:"type"`
 	URI  string `json:"uri"`
+	Type string `json:"type"`
+	Href string `json:"href"`
 }
 
 type UserJSON struct {
@@ -58,6 +59,7 @@ type UserJSON struct {
 }
 
 type TrackJSON struct {
+	Context ContextJSON  `json:"context"`
 	Artists []ArtistJSON `json:"artists"`
 	Name    string       `json:"name"`
 	ID      string       `json:"id"`
@@ -92,6 +94,12 @@ type PlaylistJSON struct {
 		Track TrackJSON `json:"track"`
 		User  UserJSON  `json:"added_by"`
 	} `json:"items"`
+}
+
+type PlaylistInfoJSON struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 type ErrorJSON struct {
@@ -322,6 +330,44 @@ func (s *Spotify) PlaylistPlay(uid string) error {
 	}
 
 	_, err = s.run("PUT", "https://api.spotify.com/v1/me/player/play?"+query, &data)
+	return err
+}
+
+func (s *Spotify) SetPlaylist(pid string) {
+	s.playlist = pid
+}
+
+func (s *Spotify) ChangePlaylist(pid string) error {
+	s.SetPlaylist(pid)
+
+	data := RequestData{
+		rtype: RequestTypeString,
+		text:  `{"context_uri":"spotify:playlist:` + s.playlist + `","offset":{"position": 0},"position_ms":0}`,
+	}
+
+	query := ""
+	if s.device != "" {
+		query = "device_id=" + s.device
+	}
+
+	_, err := s.run("PUT", "https://api.spotify.com/v1/me/player/play?"+query, &data)
+	return err
+}
+
+func (s *Spotify) Album(pid string) error {
+	s.SetPlaylist(pid)
+
+	data := RequestData{
+		rtype: RequestTypeString,
+		text:  `{"context_uri":"spotify:album:` + s.playlist + `","offset":{"position": 0},"position_ms":0}`,
+	}
+
+	query := ""
+	if s.device != "" {
+		query = "device_id=" + s.device
+	}
+
+	_, err := s.run("PUT", "https://api.spotify.com/v1/me/player/play?"+query, &data)
 	return err
 }
 
@@ -559,6 +605,23 @@ func (s *Spotify) Devices() ([]DeviceJSON, error) {
 	return devices.Items, nil
 }
 
+func (s *Spotify) Playlist(pid string) (*PlaylistInfoJSON, error) {
+	var playlist PlaylistInfoJSON
+	body, err := s.run("GET", "https://api.spotify.com/v1/playlists/"+pid, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal([]byte(body), &playlist)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &playlist, nil
+}
+
 func (s *Spotify) Current() (*TrackJSON, error) {
 	var song CurrentJSON
 
@@ -581,4 +644,22 @@ func (s *Spotify) Current() (*TrackJSON, error) {
 	}
 
 	return &song.Track, nil
+}
+
+func (s *Spotify) Context() (*ContextJSON, error) {
+	var song CurrentJSON
+
+	body, err := s.run("GET", "https://api.spotify.com/v1/me/player/currently-playing", nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal([]byte(body), &song)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &song.Context, nil
 }
