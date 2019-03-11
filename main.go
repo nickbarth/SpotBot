@@ -14,6 +14,7 @@ const SPOTIFY_CLIENT_AUTH = ""
 const SPOTIFY_REFRESH_TOKEN = ""
 const PLAYLIST_ID = ""
 const SPOTIFY_DEVICE = ""
+const WEATHER_URL = "http://dd.weatheroffice.gc.ca/citypage_weather/xml/AB/s0000045_e.xml"
 
 var spotify Spotify
 
@@ -306,6 +307,12 @@ func main() {
 
 	slackbot.Command("joke", func(args string) string {
 		return Joke{}.Get()
+	})
+
+	slackbot.Command("weather", func(args string) string {
+		return Weather{
+			url: WEATHER_URL,
+		}.Get()
 	})
 
 	fmt.Println("Listening...")
