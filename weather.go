@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 )
 
 type WeatherJSON struct {
@@ -38,16 +39,34 @@ func (w Weather) Get() string {
 
 	// body = []byte(`<siteData> <license>test</license> <forecastGroup><forecast> <period>Monday</period> <textSummary>A mix of sun and cloud. High 11. UV index 3 or moderate.</textSummary></forecast></forecastGroup> </siteData>`)
 
-	var weather WeatherJSON
-	// err = xml.Unmarshal(body, &weather)
+	var data WeatherJSON
+	// err = xml.Unmarshal(body, &data)
 	reader := bytes.NewReader(body)
 	decoder := xml.NewDecoder(reader)
 	decoder.CharsetReader = charset.NewReaderLabel
-	err = decoder.Decode(&weather)
+	err = decoder.Decode(&data)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	return weather.ForecastGroup.Forecast[0].TextSummary
+	weather := data.ForecastGroup.Forecast[0].TextSummary
+
+	replace := map[string]string{
+		"Sunny":         "Sunny ☀️",
+		"Clear":         "Clear ☀️",
+		"Partly cloudy": "Partly cloudy 🌤",
+		"Cloudy":        "Cloudy ☁️",
+		"Rain":          "Rain 🌧",
+		"Sleet":         "Sleet 🌨",
+		"Snow":          "Snow ❄️",
+		"Wind":          "Wind 💨️",
+		"Fog":           "Fog 🌫",
+	}
+
+	for s, r := range replace {
+		weather = strings.Replace(weather, s, r, -1)
+	}
+
+	return weather
 }
