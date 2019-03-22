@@ -157,6 +157,27 @@ func main() {
 		}
 	})
 
+	slackbot.Command("song", func(name string) string {
+		var song *TrackJSON
+		var err error
+
+		if name == "" {
+			song, err = spotify.Current()
+		} else {
+			song, err = spotify.Search(name)
+		}
+
+		if err != nil {
+			return `_Error ` + err.Error() + `_`
+		}
+
+		if song == nil {
+			return `_Song "` + name + `" Not Found._`
+		}
+
+		return `_Now Playing "` + song.Title() + `"_`
+	})
+
 	blame := func(name string) string {
 		var song *TrackJSON
 		var err error
@@ -187,7 +208,6 @@ func main() {
 
 		return `_"` + song.Title() + `" was added by ` + user.Name + `._`
 	}
-	slackbot.Command("song", blame)
 	slackbot.Command("blame", blame)
 	slackbot.Command("who", blame)
 
